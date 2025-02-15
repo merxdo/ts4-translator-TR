@@ -12,7 +12,6 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PySide6.QtCore import Qt, QSize, QThread, Signal, QThreadPool, QRunnable, QObject, Slot
 from PySide6.QtGui import QFont, QIcon, QColor, QAction
 from googletrans import Translator
-import deepl
 import urllib.request
 import urllib.parse
 import re
