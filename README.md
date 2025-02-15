@@ -1,12 +1,13 @@
-# The Sims 4 Mod Translator
+# The Sims 4 Mod Translator TR
 
-The Sims 4 mod dize dosyalarını çevirmek için modern bir GUI uygulaması. Python ve PySide6 ile oluşturulmuştur.
+The Sims 4 için indirdiğiniz mod dosyalarını manuel veya otomatik olarak türkçe diline çevirin.
 
 ## Özellikler
 
 - Sims 4 mod dize dosyalarını yükleyin
 - Orijinal dizeleri tablo biçiminde görüntüleyin
 - Çevirileri doğrudan uygulamada düzenleyin
+- Çevirileri otomatik olarak uygulayın
 - Değiştirilen dizeleri yeni bir dosyaya kaydedin
 - Modern ve kullanıcı dostu arayüz
 
@@ -22,7 +23,7 @@ pip install -r requirements.txt
 
 Uygulamayı çalıştırın:
 ```bash
-python main.py
+py ts4translatorTR.py
 ```
 
 ## Nasıl Kullanılır
