@@ -575,9 +575,9 @@ class ModTranslator(QMainWindow):
     def auto_translate_all(self):
         try:
             # Create progress dialog
-            self.progress = QProgressDialog("Translating strings...", "Cancel", 0, self.table.rowCount(), self)
+            self.progress = QProgressDialog("Dizeler çevriliyor...", "İptal", 0, self.table.rowCount(), self)
             self.progress.setWindowModality(Qt.WindowModal)
-            self.progress.setWindowTitle("Auto-Translation Progress")
+            self.progress.setWindowTitle("Otomatik Çeviri İlerlemesi")
             
             # Collect all texts to translate
             texts_to_translate = []
