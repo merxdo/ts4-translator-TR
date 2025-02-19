@@ -1,16 +1,16 @@
 # The Sims 4 Mod Translator TR
 
 The Sims 4 için indirdiğiniz mod dosyalarını manuel veya otomatik olarak türkçe diline çevirin.
-Otomatik çeviri şu an sadece ingilizceden türkçe diline çeviri yapabiliyor. Daha sonra diğer dil destekleride eklenecek.
+
+Program hakkında herhangi bir sorun yaşıyorsanız, modların hazır çevirisine ulaşmak istiyorsanız veya mod çevirilerinde güncel kalmak istiyorsanız discord sunucuma katılabilirsiniz.
+https://discord.com/invite/mS2gTuNAwz
 
 ## Özellikler
 
-- Sims 4 mod dize dosyalarını yükleyin
 - Orijinal dizeleri tablo biçiminde görüntüleyin
 - Çevirileri doğrudan uygulamada düzenleyin
 - Çevirileri otomatik olarak uygulayın
 - Değiştirilen dizeleri yeni bir dosyaya kaydedin
-- Modern ve kullanıcı dostu arayüz
 
 ## Kurulum
 
