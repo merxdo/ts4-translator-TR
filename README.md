@@ -2,9 +2,6 @@
 
 The Sims 4 için indirdiğiniz mod dosyalarını manuel veya otomatik olarak türkçe diline çevirin.
 
-Program hakkında herhangi bir sorun yaşıyorsanız, modların hazır çevirisine ulaşmak istiyorsanız veya mod çevirilerinde güncel kalmak istiyorsanız discord sunucuma katılabilirsiniz.
-https://discord.com/invite/mS2gTuNAwz
-
 ## Özellikler
 
 - Orijinal dizeleri tablo biçiminde görüntüleyin
