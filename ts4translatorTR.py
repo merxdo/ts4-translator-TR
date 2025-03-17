@@ -105,7 +105,7 @@ def decode_ref_pack(ibuf):
     return bytes(obuf)
 
 class DBPFFile:
-    STBL_TYPE = 0x220557DA  # String table type ID
+    STBL_TYPE = 0x220557DA  # Dize tablo türü kimliği
     
     def __init__(self):
         self.header: Optional[DBPFHeader] = None
@@ -114,7 +114,7 @@ class DBPFFile:
         
     def load_from_binary(self, data: bytes) -> bool:
         try:
-            if len(data) < 96:  # Minimum header size
+            if len(data) < 96:  # Minimum başlık boyutu
                 print("Data too small for DBPF")
                 return False
                 
@@ -122,9 +122,9 @@ class DBPFFile:
                 print("Not a DBPF file")
                 return False
                 
-            pos = 4  # Skip DBPF magic
+            pos = 4  # DBPF büyüsünü atla
             
-            # Read file version (must be 2,1)
+            # Dosya sürümünü oku (2,1 olmalı)
             file_version = (int.from_bytes(data[pos:pos+4], 'little'),
                           int.from_bytes(data[pos+4:pos+8], 'little'))
             if file_version != (2, 1):
@@ -132,7 +132,7 @@ class DBPFFile:
                 return False
             pos += 8
             
-            # Read user version (must be 0,0)
+            # Kullanıcı sürümünü oku (0,0 olmalı)
             user_version = (int.from_bytes(data[pos:pos+4], 'little'),
                           int.from_bytes(data[pos+4:pos+8], 'little'))
             if user_version != (0, 0):
@@ -140,19 +140,19 @@ class DBPFFile:
                 return False
             pos += 8
             
-            # Skip unused
+            # Kullanılmayanları atla
             pos += 4
             
-            # Read timestamps
+            # Zaman damgalarını oku
             creation_time = int.from_bytes(data[pos:pos+4], 'little')
             pos += 4
             updated_time = int.from_bytes(data[pos:pos+4], 'little')
             pos += 4
             
-            # Skip unused
+            # Kullanılmayanları atla
             pos += 4
             
-            # Read index info
+            # Dizin bilgilerini oku
             index_count = int.from_bytes(data[pos:pos+4], 'little')
             pos += 4
             index_offset_low = int.from_bytes(data[pos:pos+4], 'little')
@@ -160,11 +160,11 @@ class DBPFFile:
             index_size = int.from_bytes(data[pos:pos+4], 'little')
             pos += 4
             
-            # Skip to high offset
+            # Yüksek ofsete geç
             pos += 16
             index_offset_high = int.from_bytes(data[pos:pos+4], 'little')
             
-            # Use high offset if available
+            # Mümkünse yüksek ofset kullan
             index_offset = index_offset_high if index_offset_high != 0 else index_offset_low
             
             print(f"DBPF Version: {file_version}")
@@ -177,7 +177,7 @@ class DBPFFile:
                     print("Warning: Package contains entries but no index")
                 return False
             
-            # Store header info
+            # Başlık bilgisi
             self.header = DBPFHeader(
                 version=file_version[0],
                 index_major_version=user_version[0],
@@ -186,12 +186,12 @@ class DBPFFile:
                 index_size=index_size
             )
             
-            # Read index entries
+            # Dizin girişlerini oku
             pos = index_offset
             flags = int.from_bytes(data[pos:pos+4], 'little')
             pos += 4
             
-            # Handle constant values based on flags
+            # Bayraklara dayalı sabit değerleri işle
             const_type = bool(flags & 1)
             const_group = bool(flags & 2)
             const_instance_ex = bool(flags & 4)
@@ -208,38 +208,38 @@ class DBPFFile:
             
             for i in range(index_count):
                 try:
-                    # Read type ID if not constant
+                    # Sabit değilse tür kimliğini oku
                     if not const_type:
                         entry_type = int.from_bytes(data[pos:pos+4], 'little')
                         pos += 4
                     
-                    # Read group ID if not constant
+                    # Sabit değilse grup kimliğini oku
                     if not const_group:
                         entry_group = int.from_bytes(data[pos:pos+4], 'little')
                         pos += 4
                     
-                    # Read instance high bits if not constant
+                    # Sabit değilse örnek yüksek bitleri oku
                     if not const_instance_ex:
                         entry_inst_ex = int.from_bytes(data[pos:pos+4], 'little')
                         pos += 4
                     else:
                         entry_inst_ex = int.from_bytes(data[index_pos+4:index_pos+8], 'little')
                     
-                    # Read instance low bits
+                    # Düşük bitleri oku
                     entry_inst = int.from_bytes(data[pos:pos+4], 'little')
                     pos += 4
                     
-                    # Read resource offset and size
+                    # Kaynak ofsetini ve boyutunu oku
                     resource_offset = int.from_bytes(data[pos:pos+4], 'little')
                     pos += 4
                     file_size = int.from_bytes(data[pos:pos+4], 'little')
                     pos += 4
                     
-                    # Read decompressed size
+                    # Sıkıştırılmış boyutu oku
                     decompressed_size = int.from_bytes(data[pos:pos+4], 'little')
                     pos += 4
                     
-                    # Handle compression
+                    # Sıkıştırmayı ele al
                     if file_size & 0x80000000:
                         compression = (int.from_bytes(data[pos:pos+2], 'little'),
                                     int.from_bytes(data[pos+2:pos+4], 'little'))
@@ -247,13 +247,13 @@ class DBPFFile:
                     else:
                         compression = (0, 1)
                     
-                    # Clear high bit from size
+                    # Boyuttan yüksek biti temizle
                     file_size &= 0x7FFFFFFF
                     
                     print(f"Entry {i}: Type={hex(entry_type)}, Group={hex(entry_group)}, Instance={hex(entry_inst_ex << 32 | entry_inst)}")
                     print(f"  Offset={resource_offset}, Size={file_size}, Compression={compression}")
                     
-                    # Skip deleted entries
+                    # Silinen girdileri atla
                     if compression[0] == 0xFFE0:
                         continue
                     
@@ -267,14 +267,14 @@ class DBPFFile:
                     
                     self.entries.append(entry)
                     
-                    # If this is a string table, try to load it
+                    # Eğer bu bir dize tablosuysa yüklemeyi dene
                     if entry_type == self.STBL_TYPE:
                         try:
-                            # Get the raw data for this entry
+                            # Bu giriş için verileri al
                             stbl_data = data[resource_offset:resource_offset+file_size]
                             
-                            # Handle compression
-                            if compression[0] == 0:  # No compression
+                            # Sıkıştırmayı ele al
+                            if compression[0] == 0:  # Sıkıştırma yok
                                 pass
                             elif compression[0] == 0x5A42:  # zlib
                                 import zlib
@@ -446,50 +446,50 @@ class StringTableFile:
                 
             pos = 4
             
-            # Read version (must be 5)
+            # Sürümü oku (5 olmalı)
             version = int.from_bytes(data[pos:pos+2], 'little')
             if version != 5:
                 print(f"Unsupported STBL version: {version}")
                 return False
             pos += 2
             
-            # Read compression flag
+            # Sıkıştırma bayrağını oku
             compressed = data[pos]
             pos += 1
             
-            # Read number of entries
+            # Girişlerin okunma sayısı
             num_entries = int.from_bytes(data[pos:pos+8], 'little')
             pos += 8
             
-            # Skip reserved bytes
+            # Ayrılmış baytları atla
             pos += 2
             
-            # Read strings length
+            # Dizelerin uzunluğunu oku
             strings_length = int.from_bytes(data[pos:pos+4], 'little')
             pos += 4
             
-            # Read all string entries
+            # Tüm dize girişlerini oku
             for _ in range(num_entries):
                 try:
-                    # Read key
+                    # Anahtarı oku
                     key = int.from_bytes(data[pos:pos+4], 'little')
                     pos += 4
                     
-                    # Read flags
+                    # Bayrakları oku
                     flags = data[pos]
                     pos += 1
                     
-                    # Read string length
+                    # Dize uzunluğunu oku
                     length = int.from_bytes(data[pos:pos+2], 'little')
                     pos += 2
                     
-                    # Read string value and decode as UTF-8
+                    # Dize değerini oku ve UTF-8 olarak kodla
                     try:
                         # String'i direkt olarak UTF-8 ile decode et
                         value = data[pos:pos+length].decode('utf-8', errors='replace')
                         pos += length
                         
-                        # Store string
+                        # Dizeyi sakla
                         self.strings[key] = StringTableEntry(key=key, value=value, flags=flags)
                     except UnicodeError as e:
                         print(f"Error decoding string at position {pos}: {e}")
@@ -515,11 +515,11 @@ class StringTableFile:
             data = bytearray()
             
             # STBL başlığını yaz
-            data.extend(b'STBL')  # Magic number
-            data.extend((5).to_bytes(2, 'little'))  # Version
-            data.append(0)  # Compression flag
-            data.extend(num_entries.to_bytes(8, 'little'))  # Number of entries
-            data.extend((0).to_bytes(2, 'little'))  # Reserved
+            data.extend(b'STBL')
+            data.extend((5).to_bytes(2, 'little'))  # Versiyon
+            data.append(0)  # Sıkıştırma bayrağı
+            data.extend(num_entries.to_bytes(8, 'little'))  # Giriş sayısı
+            data.extend((0).to_bytes(2, 'little'))  # Rezerve
             
             # String uzunluklarını hesapla
             strings_length = 0
@@ -537,19 +537,19 @@ class StringTableFile:
             for key in sorted(self.strings.keys()):
                 entry = self.strings[key]
                 
-                # Key'i yaz
+                # Anahtarı yaz
                 data.extend(key.to_bytes(4, 'little'))
                 
                 # Flag'i yaz
                 data.append(entry.flags)
                 
-                # String'i formatla ve yaz
+                # Diziyi formatla ve yaz
                 formatted_value = entry.get_formatted_value()
                 if formatted_value:
                     string_bytes = formatted_value.encode('utf-8')
                     # String uzunluğunu yaz
                     data.extend(len(string_bytes).to_bytes(2, 'little'))
-                    # String'in kendisini yaz
+                    # Dizinin kendisini yaz
                     data.extend(string_bytes)
                 else:
                     # Boş string için 0 uzunluk
@@ -572,7 +572,7 @@ class TranslateWorker(QRunnable):
         self.texts = texts
         self.start_index = start_index
         self.signals = WorkerSignals()
-        self.translation_speed = 500  # Default speed in ms
+        self.translation_speed = 500  # Varsayılan hız (ms)
         
     def preprocess_text(self, text):
         """Çeviri öncesi metni hazırla"""
@@ -732,7 +732,7 @@ class TranslateWorker(QRunnable):
                                     result = translator.translate_text(to_translate, target_lang="TR")
                                     translated = result.text
                                     
-                                    # Çeviriyi son işle
+                                    # Çeviri son işle
                                     translated = self.postprocess_translation(translated)
                                     
                                     # Boşlukları geri ekle
@@ -751,8 +751,8 @@ class TranslateWorker(QRunnable):
                             translated = self.postprocess_translation(translated)
                             self.signals.progress.emit(self.start_index + i, translated)
                             
-                            # Add delay between translations based on translation speed
-                            if i < len(self.texts) - 1:  # Don't delay after the last item
+                            # Çeviri hızına bağlı olarak çeviriler arasında gecikme ekle
+                            if i < len(self.texts) - 1:  # Son maddeden sonra gecikme
                                 QThread.msleep(self.translation_speed)
                 except Exception as e:
                     self.signals.error.emit(f"DeepL çeviri hatası: {str(e)}")
@@ -780,7 +780,7 @@ class TranslateWorker(QRunnable):
                             # Önceki normal metni ekle (eğer varsa)
                             if start > last_end:
                                 prev_text = text[last_end:start]
-                                # Metni ön işle
+                                # Metni ön işleme
                                 prev_text = self.preprocess_text(prev_text)
                                 segments.append(('text', prev_text))
                             
@@ -844,8 +844,8 @@ class TranslateWorker(QRunnable):
                         translated = self.postprocess_translation(translated)
                         self.signals.progress.emit(self.start_index + i, translated)
                         
-                        # Add delay between translations based on translation speed
-                        if i < len(self.texts) - 1:  # Don't delay after the last item
+                        # Çeviri hızına bağlı olarak çeviriler arasında gecikme ekle
+                        if i < len(self.texts) - 1:  # Son maddeden sonra gecikme
                             QThread.msleep(self.translation_speed)
             
             self.signals.finished.emit()
@@ -895,7 +895,6 @@ class EditDialog(QDialog):
         self.editable_text.setPlainText(editable_text)
         self.highlight_game_values(self.editable_text)
         
-        # textChanged sinyalini kaldırdık ve yerine cursorPositionChanged kullanıyoruz
         self.editable_text.cursorPositionChanged.connect(self.on_cursor_position_changed)
         
         self.editable_text.setStyleSheet("""
@@ -965,7 +964,7 @@ class EditDialog(QDialog):
         
         layout.addLayout(buttons_layout)
         
-        # Dialog style
+        # Diyalog stili
         self.setStyleSheet("""
             QDialog {
                 background-color: #2D2D2D;
@@ -1008,7 +1007,7 @@ class EditDialog(QDialog):
         cursor = text_edit.textCursor()
         
         # Oyun değerlerini bul ve renklendir
-        game_values = list(re.finditer(r'{[^{}]*}', text))  # Sadece süslü parantez içindeki değerleri yakala
+        game_values = list(re.finditer(r'{[^{}]*}', text))  # Sadece süslü parantez içindeki değerleri al
         offset = 0
         
         for match in game_values:
@@ -1285,38 +1284,38 @@ class ModTranslator(QMainWindow):
         self.setWindowTitle("The Sims 4 Mod Translator TR | Discord: merxdo")
         self.setMinimumSize(1200, 800)
         
-        # Initialize package file
+        # Paket dosyasını başlat
         self.package_file = DBPFFile()
         self.current_file_data = None
         
-        # Initialize thread pool
+        # İş parçacığı havuzunu başlat
         self.thread_pool = QThreadPool()
         self.active_workers = 0
         
-        # Değişiklikleri takip etmek için
+        # Değişiklikleri takip et
         self.has_unsaved_changes = False
         
-        # Setup UI
+        # UI kurulumu
         self.setup_ui()
         
-        # Apply dark theme
+        # Koyu temayı uygula
         self.apply_dark_theme()
         
     def setup_ui(self):
-        # Create central widget and main layout
+        # Merkezi widget ve ana düzen oluştur
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(10, 10, 10, 10)
         
-        # Create menu bar
+        # Menü çubuğu oluştur
         self.create_menu_bar()
         
-        # Create toolbar
+        # Araç çubuğu oluştur
         self.create_toolbar()
         
-        # Create header section
+        # Başlık bölümü
         header_frame = QFrame()
         header_frame.setFrameShape(QFrame.StyledPanel)
         header_frame.setStyleSheet("""
@@ -1332,7 +1331,7 @@ class ModTranslator(QMainWindow):
         # Üst kısım - Arama ve çeviri butonu
         top_section = QHBoxLayout()
         
-        # Create search bar
+        # Arama çubuğu
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Kelime ara...")
         self.search_input.textChanged.connect(self.filter_table)
@@ -1351,7 +1350,7 @@ class ModTranslator(QMainWindow):
         """)
         top_section.addWidget(self.search_input)
         
-        # Add auto-translate button
+        # Otomatik çeviri butonu
         self.translate_btn = QPushButton("Hepsini Otomatik Çevir")
         self.translate_btn.setStyleSheet("""
             QPushButton {
@@ -1401,7 +1400,7 @@ class ModTranslator(QMainWindow):
         
         main_layout.addWidget(header_frame)
         
-        # Create table
+        # Tablo oluştur
         self.table = QTableWidget()
         self.table.setColumnCount(4)  # Seçim kutusu için bir sütun ekle
         self.table.setHorizontalHeaderLabels(["Seç", "Anahtar", "Orijinal Dize", "Düzenlenebilir Dize"])
@@ -1454,7 +1453,7 @@ class ModTranslator(QMainWindow):
         
         main_layout.addWidget(self.table)
         
-        # Create status bar
+        # Durum çubuğu oluştur
         self.status_bar = QStatusBar()
         self.status_bar.setStyleSheet("""
             QStatusBar {
@@ -1469,14 +1468,14 @@ class ModTranslator(QMainWindow):
         # Başlangıç mesajı
         self.status_bar.showMessage("Hazır. Dosya > Aç menüsünden bir dosya seçin.")
         
-        # Seçilen satırları takip etmek için
+        # Seçilen satırları takip et
         self.selected_rows = set()
         
-        # Çeviri butonunun durumunu güncellemek için
+        # Çeviri butonunun durumunu güncelle
         self.update_translate_button()
         
     def apply_dark_theme(self):
-        # Set application font
+        # Uygulama yazı tipini ayarla
         font_id = QFontDatabase.addApplicationFont(":/fonts/Segoe UI")
         if font_id != -1:
             font_family = QFontDatabase.applicationFontFamilies(font_id)[0]
