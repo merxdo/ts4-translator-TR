@@ -11,13 +11,18 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QInputDialog, QFrame, QSplitter, QDialog, QGroupBox, QTextEdit,
                              QRadioButton, QProgressBar)
 from PySide6.QtCore import Qt, QSize, QThread, Signal, QThreadPool, QRunnable, QObject, Slot, QSettings
-from PySide6.QtGui import QFont, QIcon, QColor, QAction, QPalette, QFontDatabase
-from googletrans import Translator
+from PySide6.QtGui import QFont, QIcon, QColor, QAction, QPalette, QFontDatabase, QIntValidator
 import urllib.request
 import urllib.parse
 import re
 import html.parser
-import deepl
+
+# DeepL modülünü koşullu olarak import et
+try:
+    import deepl
+    DEEPL_AVAILABLE = True
+except ImportError:
+    DEEPL_AVAILABLE = False
 
 @dataclass
 class DBPFHeader:
@@ -517,11 +522,13 @@ class StringTableFile:
             data.extend((0).to_bytes(2, 'little'))  # Reserved
             
             # String uzunluklarını hesapla
-            strings_length = num_entries  # Her string için 1 byte
+            strings_length = 0
             for entry in self.strings.values():
                 formatted_value = entry.get_formatted_value()
                 if formatted_value:  # Boş string kontrolü
-                    strings_length += len(formatted_value.encode('utf-8'))
+                    strings_length += len(formatted_value.encode('utf-8')) + 7  # 4 (key) + 1 (flag) + 2 (length)
+                else:
+                    strings_length += 7  # 4 (key) + 1 (flag) + 2 (length)
             
             # Toplam string uzunluğunu yaz
             data.extend(strings_length.to_bytes(4, 'little'))
@@ -565,6 +572,7 @@ class TranslateWorker(QRunnable):
         self.texts = texts
         self.start_index = start_index
         self.signals = WorkerSignals()
+        self.translation_speed = 500  # Default speed in ms
         
     def preprocess_text(self, text):
         """Çeviri öncesi metni hazırla"""
@@ -666,7 +674,7 @@ class TranslateWorker(QRunnable):
             settings = QSettings("TS4ModTranslator", "Settings")
             service = settings.value("translation_service", "google")
 
-            if service == "deepl":
+            if service == "deepl" and DEEPL_AVAILABLE:
                 api_key = settings.value("deepl_api_key", "")
                 if not api_key:
                     self.signals.error.emit("DeepL API Key bulunamadı. Lütfen ayarlardan API Key'inizi girin.")
@@ -742,10 +750,18 @@ class TranslateWorker(QRunnable):
                             # Son bir kez tüm metni son işle
                             translated = self.postprocess_translation(translated)
                             self.signals.progress.emit(self.start_index + i, translated)
+                            
+                            # Add delay between translations based on translation speed
+                            if i < len(self.texts) - 1:  # Don't delay after the last item
+                                QThread.msleep(self.translation_speed)
                 except Exception as e:
                     self.signals.error.emit(f"DeepL çeviri hatası: {str(e)}")
                     return
             else:
+                # DeepL seçili ama kullanılamıyorsa uyarı ver
+                if service == "deepl" and not DEEPL_AVAILABLE:
+                    self.signals.error.emit("DeepL modülü yüklü değil. Google Translate kullanılıyor.")
+                
                 # Google Translate kullan
                 url = 'http://translate.google.com/m?sl=auto&tl=tr&q=%s'
                 ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
@@ -827,6 +843,10 @@ class TranslateWorker(QRunnable):
                         # Son bir kez tüm metni son işle
                         translated = self.postprocess_translation(translated)
                         self.signals.progress.emit(self.start_index + i, translated)
+                        
+                        # Add delay between translations based on translation speed
+                        if i < len(self.texts) - 1:  # Don't delay after the last item
+                            QThread.msleep(self.translation_speed)
             
             self.signals.finished.emit()
                     
@@ -892,28 +912,6 @@ class EditDialog(QDialog):
             }
         """)
         editable_layout.addWidget(self.editable_text)
-        
-        # Otomatik çeviri butonu
-        auto_translate_btn = QPushButton("Otomatik Çevir")
-        auto_translate_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #007ACC;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-                min-width: 80px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #005999;
-            }
-            QPushButton:pressed {
-                background-color: #004C80;
-            }
-        """)
-        auto_translate_btn.clicked.connect(self.auto_translate_current)
-        editable_layout.addWidget(auto_translate_btn)
         
         texts_layout.addWidget(editable_group)
         
@@ -1057,7 +1055,7 @@ class EditDialog(QDialog):
             settings = QSettings("TS4ModTranslator", "Settings")
             service = settings.value("translation_service", "google")
 
-            if service == "deepl":
+            if service == "deepl" and DEEPL_AVAILABLE:
                 api_key = settings.value("deepl_api_key", "")
                 if not api_key:
                     QMessageBox.warning(
@@ -1079,6 +1077,14 @@ class EditDialog(QDialog):
                     )
                     return
             else:
+                # DeepL seçili ama kullanılamıyorsa uyarı ver
+                if service == "deepl" and not DEEPL_AVAILABLE:
+                    QMessageBox.warning(
+                        self,
+                        "Uyarı",
+                        "DeepL modülü yüklü değil. Google Translate kullanılıyor."
+                    )
+                
                 # Google Translate kullan
                 text = text.replace("\n", r"\x0a").replace("\r", r"\x0d")
                 url = 'http://translate.google.com/m?sl=auto&tl=tr&q=%s'
@@ -1139,6 +1145,19 @@ class SettingsDialog(QDialog):
         self.api_key_input.setEchoMode(QLineEdit.Password)
         api_layout.addWidget(self.api_key_input)
         
+        # Çeviri hızı ayarı
+        speed_group = QGroupBox("Çeviri Hızı")
+        speed_layout = QVBoxLayout(speed_group)
+        
+        speed_label = QLabel("Çeviri istekleri arasındaki bekleme süresi (ms):")
+        self.speed_input = QLineEdit()
+        self.speed_input.setPlaceholderText("Örn: 500")
+        self.speed_input.setText(settings.value("translation_speed", "500"))
+        self.speed_input.setValidator(QIntValidator(0, 10000))
+        
+        speed_layout.addWidget(speed_label)
+        speed_layout.addWidget(self.speed_input)
+        
         # Butonlar
         buttons_layout = QHBoxLayout()
         
@@ -1170,7 +1189,7 @@ class SettingsDialog(QDialog):
                 padding: 0 4px;
                 left: 8px;
             }
-            QRadioButton {
+            QRadioButton, QLabel {
                 color: #FFFFFF;
                 padding: 4px;
             }
@@ -1207,6 +1226,7 @@ class SettingsDialog(QDialog):
         # Layout'ları ana layout'a ekle
         layout.addWidget(service_group)
         layout.addWidget(api_group)
+        layout.addWidget(speed_group)
         layout.addLayout(buttons_layout)
         
     def save_settings(self):
@@ -1220,7 +1240,7 @@ class SettingsDialog(QDialog):
             return
             
         # API key'i test et
-        if self.deepl_radio.isChecked():
+        if self.deepl_radio.isChecked() and DEEPL_AVAILABLE:
             try:
                 translator = deepl.Translator(self.api_key_input.text().strip())
                 # API key'in geçerli olup olmadığını kontrol et
@@ -1232,11 +1252,31 @@ class SettingsDialog(QDialog):
                     f"Girilen API Key geçersiz veya hatalı.\nHata: {str(e)}"
                 )
                 return
+        elif self.deepl_radio.isChecked() and not DEEPL_AVAILABLE:
+            QMessageBox.warning(
+                self,
+                "Uyarı",
+                "DeepL modülü yüklü değil. DeepL seçilse bile Google Translate kullanılacak."
+            )
+        
+        # Çeviri hızını kontrol et
+        try:
+            speed = int(self.speed_input.text())
+            if speed < 0:
+                raise ValueError("Çeviri hızı negatif olamaz")
+        except ValueError:
+            QMessageBox.warning(
+                self,
+                "Uyarı",
+                "Çeviri hızı geçerli bir sayı olmalıdır.\nVarsayılan değer (500 ms) kullanılacak."
+            )
+            self.speed_input.setText("500")
         
         # Ayarları kaydet
         settings = QSettings("TS4ModTranslator", "Settings")
         settings.setValue("translation_service", "google" if self.google_radio.isChecked() else "deepl")
         settings.setValue("deepl_api_key", self.api_key_input.text().strip())
+        settings.setValue("translation_speed", self.speed_input.text().strip())
         self.accept()
 
 class ModTranslator(QMainWindow):
@@ -1312,8 +1352,8 @@ class ModTranslator(QMainWindow):
         top_section.addWidget(self.search_input)
         
         # Add auto-translate button
-        translate_btn = QPushButton("Hepsini Otomatik Çevir")
-        translate_btn.setStyleSheet("""
+        self.translate_btn = QPushButton("Hepsini Otomatik Çevir")
+        self.translate_btn.setStyleSheet("""
             QPushButton {
                 background-color: #007ACC;
                 color: white;
@@ -1330,8 +1370,8 @@ class ModTranslator(QMainWindow):
                 background-color: #004C80;
             }
         """)
-        translate_btn.clicked.connect(self.auto_translate_all)
-        top_section.addWidget(translate_btn)
+        self.translate_btn.clicked.connect(self.auto_translate_all)
+        top_section.addWidget(self.translate_btn)
         
         header_layout.addLayout(top_section)
         
@@ -1348,17 +1388,13 @@ class ModTranslator(QMainWindow):
                 padding: 1px;
                 text-align: center;
                 color: white;
-                font-weight: bold;
             }
             QProgressBar::chunk {
-                background-color: #2EA043;
-                border-radius: 3px;
+                background-color: #007ACC;
+                border-radius: 4px;
             }
         """)
-        self.progress_bar.setFixedHeight(25)
-        self.progress_bar.setTextVisible(True)
-        self.progress_bar.setFormat("Çeviri İlerlemesi: %p%")
-        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat("Çeviri İlerlemesi: %p% (%v/%m)")
         progress_section.addWidget(self.progress_bar)
         
         header_layout.addLayout(progress_section)
@@ -1367,78 +1403,55 @@ class ModTranslator(QMainWindow):
         
         # Create table
         self.table = QTableWidget()
-        self.table.setColumnCount(3)
-        self.table.setHorizontalHeaderLabels(["Anahtar", "Orjinal Dize", "Düzenlenebilir Dize"])
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table.setColumnCount(4)  # Seçim kutusu için bir sütun ekle
+        self.table.setHorizontalHeaderLabels(["Seç", "Anahtar", "Orijinal Dize", "Düzenlenebilir Dize"])
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setSelectionMode(QTableWidget.SingleSelection)
+        self.table.cellDoubleClicked.connect(self.show_edit_dialog)
+        
+        # Stil
         self.table.setStyleSheet("""
             QTableWidget {
                 background-color: #1E1E1E;
                 color: #FFFFFF;
-                gridline-color: #2D2D2D;
-                border: 1px solid #2D2D2D;
-                border-radius: 8px;
-                font-size: 13px;
+                gridline-color: #3D3D3D;
+                border: 1px solid #3D3D3D;
+                border-radius: 4px;
+                selection-background-color: #264F78;
+                selection-color: #FFFFFF;
+                alternate-background-color: #2A2A2A;
             }
             QTableWidget::item {
-                padding: 5px;
+                padding: 8px;
                 border: none;
-            }
-            QTableWidget::item:alternate {
-                background-color: #252526;
-            }
-            QTableWidget::item:!alternate {
-                background-color: #1E1E1E;
-            }
-            QTableWidget::item:selected {
-                background-color: #264F78;
-                color: #FFFFFF;
             }
             QHeaderView::section {
                 background-color: #2D2D2D;
                 color: #FFFFFF;
                 padding: 8px;
                 border: none;
+                border-right: 1px solid #3D3D3D;
+                border-bottom: 1px solid #3D3D3D;
                 font-weight: bold;
             }
-            QTableWidget QTableCornerButton::section {
-                background-color: #2D2D2D;
-                border: none;
+            QTableWidget::item:selected {
+                background-color: #264F78;
             }
-            QScrollBar:vertical {
-                background-color: #1E1E1E;
-                width: 14px;
-                margin: 0px;
+            QCheckBox {
+                color: #FFFFFF;
             }
-            QScrollBar::handle:vertical {
-                background-color: #424242;
-                min-height: 30px;
-                border-radius: 7px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background-color: #4F4F4F;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
-            QScrollBar:horizontal {
-                background-color: #1E1E1E;
-                height: 14px;
-                margin: 0px;
-            }
-            QScrollBar::handle:horizontal {
-                background-color: #424242;
-                min-width: 30px;
-                border-radius: 7px;
-            }
-            QScrollBar::handle:horizontal:hover {
-                background-color: #4F4F4F;
-            }
-            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-                width: 0px;
+            QCheckBox::indicator {
+                width: 16px;
+                height: 16px;
             }
         """)
+        
         main_layout.addWidget(self.table)
         
         # Create status bar
@@ -1447,14 +1460,20 @@ class ModTranslator(QMainWindow):
             QStatusBar {
                 background-color: #007ACC;
                 color: white;
+                padding: 4px;
                 font-weight: bold;
-                padding: 5px;
             }
         """)
         self.setStatusBar(self.status_bar)
         
-        # Connect table cell double click
-        self.table.cellDoubleClicked.connect(self.show_edit_dialog)
+        # Başlangıç mesajı
+        self.status_bar.showMessage("Hazır. Dosya > Aç menüsünden bir dosya seçin.")
+        
+        # Seçilen satırları takip etmek için
+        self.selected_rows = set()
+        
+        # Çeviri butonunun durumunu güncellemek için
+        self.update_translate_button()
         
     def apply_dark_theme(self):
         # Set application font
@@ -1581,11 +1600,21 @@ class ModTranslator(QMainWindow):
             texts_to_translate = []
             self.row_indices = []
             
-            for row in range(self.table.rowCount()):
-                original_text = self.table.item(row, 1).text()
-                if original_text.strip():
-                    texts_to_translate.append(original_text)
-                    self.row_indices.append(row)
+            # Check if we have selected rows
+            if self.selected_rows:
+                # Only translate selected rows
+                for row in self.selected_rows:
+                    original_text = self.table.item(row, 2).text()
+                    if original_text.strip():
+                        texts_to_translate.append(original_text)
+                        self.row_indices.append(row)
+            else:
+                # Translate all rows
+                for row in range(self.table.rowCount()):
+                    original_text = self.table.item(row, 2).text()
+                    if original_text.strip():
+                        texts_to_translate.append(original_text)
+                        self.row_indices.append(row)
             
             if not texts_to_translate:
                 return
@@ -1610,6 +1639,10 @@ class ModTranslator(QMainWindow):
             
             self.active_workers = len(chunks)
             
+            # Get translation speed from settings
+            settings = QSettings("TS4ModTranslator", "Settings")
+            translation_speed = int(settings.value("translation_speed", "500"))
+            
             # Process each chunk in parallel
             for i, chunk in enumerate(chunks):
                 if self.progress.wasCanceled():
@@ -1619,6 +1652,7 @@ class ModTranslator(QMainWindow):
                 worker.signals.progress.connect(self.update_translation)
                 worker.signals.finished.connect(self.worker_finished)
                 worker.signals.error.connect(self.worker_error)
+                worker.translation_speed = translation_speed
                 self.thread_pool.start(worker)
             
         except Exception as e:
@@ -1640,16 +1674,16 @@ class ModTranslator(QMainWindow):
                 item.setBackground(QColor("#1E392A"))  # Koyu yeşil ton
                 
                 # Tüm satırı yeşil yap
-                for col in range(3):
+                for col in range(4):  # Update to include checkbox column
                     cell_item = self.table.item(row, col)
                     if cell_item:
                         cell_item.setBackground(QColor("#1E392A"))
             
-            current_text = self.table.item(row, 2).text()
+            current_text = self.table.item(row, 2).text()  # Original text is now in column 2
             if translation != current_text:  # Eğer çeviri mevcut metinden farklıysa
                 self.has_unsaved_changes = True  # Değişiklik yapıldığını işaretle
             
-            self.table.setItem(row, 2, item)
+            self.table.setItem(row, 3, item)  # Translation is now in column 3
             
             # İlerleme sayacını artır
             self.completed_translations += 1
@@ -1778,8 +1812,8 @@ class ModTranslator(QMainWindow):
         try:
             # Update string table from UI
             for row in range(self.table.rowCount()):
-                key = int(self.table.item(row, 0).text())
-                translation = self.table.item(row, 2).text()
+                key = int(self.table.item(row, 1).text())
+                translation = self.table.item(row, 3).text()
                 if key in self.string_table.strings:
                     self.string_table.strings[key].value = translation
             
@@ -1812,25 +1846,40 @@ class ModTranslator(QMainWindow):
                 else:
                     QMessageBox.critical(self, "Hata", "STBL dosyası oluşturulurken hata oluştu")
                     
+            # Dosya başarıyla kaydedildi, programı açık tut
+            return True
+                    
         except Exception as e:
             QMessageBox.critical(self, "Hata", f"Dosya kaydedilirken hata oluştu: {str(e)}")
+            return False
                 
     def populate_table(self):
         self.table.setRowCount(0)
+        self.selected_rows.clear()
         
-        for entry in self.string_table.strings.values():
+        # Anahtarları sıralı bir şekilde işle
+        sorted_keys = sorted(self.string_table.strings.keys())
+        
+        for key in sorted_keys:
+            entry = self.string_table.strings[key]
             row = self.table.rowCount()
             self.table.insertRow(row)
+            
+            # Checkbox for selection
+            checkbox_item = QTableWidgetItem()
+            checkbox_item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+            checkbox_item.setCheckState(Qt.Unchecked)
+            self.table.setItem(row, 0, checkbox_item)
             
             # Key
             key_item = QTableWidgetItem(str(entry.key))
             key_item.setFlags(key_item.flags() & ~Qt.ItemIsEditable)
-            self.table.setItem(row, 0, key_item)
+            self.table.setItem(row, 1, key_item)
             
             # Original string
             original_item = QTableWidgetItem(entry.value)
             original_item.setFlags(original_item.flags() & ~Qt.ItemIsEditable)
-            self.table.setItem(row, 1, original_item)
+            self.table.setItem(row, 2, original_item)
             
             # Translation
             translation_item = QTableWidgetItem(entry.value)
@@ -1838,46 +1887,83 @@ class ModTranslator(QMainWindow):
             
             # Eğer çeviri varsa ve orijinalden farklıysa yeşil yap
             if entry.value.strip() and translation_item.text() != original_item.text():
-                for col in range(3):
+                for col in range(4):
                     cell_item = self.table.item(row, col)
                     if cell_item:
                         cell_item.setBackground(QColor("#1E392A"))
             
-            self.table.setItem(row, 2, translation_item)
+            self.table.setItem(row, 3, translation_item)
             
         # Tüm sütunları düzenlenemez yap
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        
+        # Connect checkbox change signal
+        self.table.itemChanged.connect(self.on_checkbox_changed)
+        
+        # Update translate button text
+        self.update_translate_button()
+        
+    def on_checkbox_changed(self, item):
+        # Only process checkbox column
+        if item.column() == 0:
+            row = item.row()
+            if item.checkState() == Qt.Checked:
+                self.selected_rows.add(row)
+            else:
+                if row in self.selected_rows:
+                    self.selected_rows.remove(row)
+            
+            # Update translate button text
+            self.update_translate_button()
+            
+    def update_translate_button(self):
+        if hasattr(self, 'selected_rows') and self.selected_rows:
+            self.translate_btn.setText(f"Seçilen Dizeleri Çevir ({len(self.selected_rows)})")
+        else:
+            self.translate_btn.setText("Hepsini Otomatik Çevir")
 
     def filter_table(self, text):
         for row in range(self.table.rowCount()):
             show_row = False
-            for col in range(1, 3):  # Search in Original String and Translation columns
+            for col in range(1, 4):  # Search in Key, Original String and Translation columns
                 item = self.table.item(row, col)
                 if item and text.lower() in item.text().lower():
                     show_row = True
                     break
             self.table.setRowHidden(row, not show_row)
-
+            
     def show_edit_dialog(self, row, column):
-        # Only show dialog for editable column (column 2)
-        if column == 2:
-            original_text = self.table.item(row, 1).text()
-            editable_text = self.table.item(row, 2).text()
+        # Only show dialog for editable column (column 3)
+        if column == 3:
+            original_text = self.table.item(row, 2).text()
+            editable_text = self.table.item(row, 3).text()
             
             dialog = EditDialog(original_text, editable_text, self)
-            if dialog.exec() == QDialog.Accepted:
-                # Update the table with edited text
+            if dialog.exec():
                 edited_text = dialog.get_edited_text()
-                if edited_text != editable_text:  # Eğer metin değiştiyse
-                    self.has_unsaved_changes = True  # Değişiklik yapıldığını işaretle
-                    self.table.item(row, 2).setText(edited_text)
+                
+                # Update the table
+                item = QTableWidgetItem(edited_text)
+                item.setFlags(item.flags() & ~Qt.ItemIsEditable)  # Disable direct editing
+                
+                # Set background color for edited text
+                if edited_text.strip() and edited_text != original_text:
+                    item.setBackground(QColor("#1E392A"))  # Koyu yeşil ton
                     
-                    # If translation is not empty, set green background
-                    if edited_text.strip():
-                        for col in range(3):
-                            cell_item = self.table.item(row, col)
-                            if cell_item:
-                                cell_item.setBackground(QColor("#1E392A"))
+                    # Tüm satırı yeşil yap
+                    for col in range(4):
+                        cell_item = self.table.item(row, col)
+                        if cell_item:
+                            cell_item.setBackground(QColor("#1E392A"))
+                
+                self.table.setItem(row, 3, item)
+                
+                # Update the string table
+                key = int(self.table.item(row, 1).text())
+                self.string_table.strings[key].value = edited_text
+                
+                # Mark as having unsaved changes
+                self.has_unsaved_changes = True
 
     def show_settings(self):
         dialog = SettingsDialog(self)
@@ -1924,20 +2010,25 @@ class ModTranslator(QMainWindow):
                 }
             """)
             
-            reply = msg_box.exec()
+            msg_box.exec()
             clicked_button = msg_box.clickedButton()
             
             if clicked_button == kaydet_btn:
-                self.save_file()
-                if not self.has_unsaved_changes:  # Eğer kaydetme başarılı olduysa
-                    event.accept()
-                else:
+                saved = self.save_file()
+                if not saved:  # Eğer kaydetme başarısız olduysa
                     event.ignore()
+                    return
+                # Kaydetme başarılı olsa bile, kullanıcı çıkmak istemiyor olabilir
+                # Bu nedenle event.ignore() ile çıkışı engelliyoruz
+                event.ignore()
+                return
             elif clicked_button == kaydetme_btn:
+                # Kullanıcı kaydetmeden çıkmak istiyor
                 event.accept()
             else:  # İptal butonu
                 event.ignore()
         else:
+            # Değişiklik yoksa normal çıkış
             event.accept()
 
 if __name__ == '__main__':
