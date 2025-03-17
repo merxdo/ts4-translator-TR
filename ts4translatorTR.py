@@ -1560,7 +1560,7 @@ class ModTranslator(QMainWindow):
         toolbar.setIconSize(QSize(24, 24))
         toolbar.setMovable(False)
         
-        # Open file action
+        # Dosya açma eylemi
         open_action = QAction(QIcon(":/icons/open.png"), "Dosyayı Aç", self)
         open_action.setStatusTip("Bir mod dosyası açın")
         open_action.triggered.connect(self.open_file)
@@ -1568,7 +1568,7 @@ class ModTranslator(QMainWindow):
         
         toolbar.addSeparator()
         
-        # Save file action
+        # Dosya kaydetme eylemi
         save_action = QAction(QIcon(":/icons/save.png"), "Dosyayı Kaydet", self)
         save_action.setStatusTip("Değişiklikleri kaydet")
         save_action.triggered.connect(self.save_file)
@@ -1576,7 +1576,7 @@ class ModTranslator(QMainWindow):
         
         toolbar.addSeparator()
         
-        # Settings action
+        # Ayarlar eylemi
         settings_action = QAction(QIcon(":/icons/settings.png"), "Seçenekler", self)
         settings_action.setStatusTip("Çeviri ayarlarını yapılandır")
         settings_action.triggered.connect(self.show_settings)
@@ -1595,20 +1595,20 @@ class ModTranslator(QMainWindow):
                 )
                 return
 
-            # Collect all texts to translate
+            # Çevrilecek tüm metinleri topla
             texts_to_translate = []
             self.row_indices = []
             
-            # Check if we have selected rows
+            # Satırları seçip seçmediğimizi kontrol et
             if self.selected_rows:
-                # Only translate selected rows
+                # Yalnızca seçili satırları çevir
                 for row in self.selected_rows:
                     original_text = self.table.item(row, 2).text()
                     if original_text.strip():
                         texts_to_translate.append(original_text)
                         self.row_indices.append(row)
             else:
-                # Translate all rows
+                # Tüm satırları çevir
                 for row in range(self.table.rowCount()):
                     original_text = self.table.item(row, 2).text()
                     if original_text.strip():
@@ -1627,22 +1627,22 @@ class ModTranslator(QMainWindow):
             self.progress_bar.setFormat("Çeviri İlerlemesi: %p% (%v/%m)")
             self.progress_bar.setMaximum(self.total_translations)
 
-            # Create progress dialog
+            # İlerleme iletişim kutusu
             self.progress = QProgressDialog("Dizeler çevriliyor...", "İptal", 0, self.total_translations, self)
             self.progress.setWindowModality(Qt.WindowModal)
             self.progress.setWindowTitle("Otomatik Çeviri İlerlemesi")
             
-            # Split texts into chunks of 10 for batch processing
+            # Toplu işleme için metinleri 10'lu parçalara böl
             chunk_size = 10
             chunks = [texts_to_translate[i:i + chunk_size] for i in range(0, len(texts_to_translate), chunk_size)]
             
             self.active_workers = len(chunks)
             
-            # Get translation speed from settings
+            # Çeviri hızı ayarını, ayarlardan al
             settings = QSettings("TS4ModTranslator", "Settings")
             translation_speed = int(settings.value("translation_speed", "500"))
             
-            # Process each chunk in parallel
+            # Her parçayı paralel olarak işle
             for i, chunk in enumerate(chunks):
                 if self.progress.wasCanceled():
                     break
@@ -1668,23 +1668,23 @@ class ModTranslator(QMainWindow):
             item = QTableWidgetItem(translation)
             item.setFlags(item.flags() & ~Qt.ItemIsEditable)  # Düzenlemeyi devre dışı bırak
             
-            # Set background color for completed translation
-            if translation.strip():  # If translation is not empty
+            # Tamamlanmış çeviri için arka plan rengini ayarla
+            if translation.strip():  # Çeviri boş değilse
                 item.setBackground(QColor("#1E392A"))  # Koyu yeşil ton
                 
                 # Tüm satırı yeşil yap
-                for col in range(4):  # Update to include checkbox column
+                for col in range(4):  # Onay kutusu sütununu eklemek için güncelle
                     cell_item = self.table.item(row, col)
                     if cell_item:
                         cell_item.setBackground(QColor("#1E392A"))
             
-            current_text = self.table.item(row, 2).text()  # Original text is now in column 2
+            current_text = self.table.item(row, 2).text()  # Orijinal metin 2. stunda
             if translation != current_text:  # Eğer çeviri mevcut metinden farklıysa
                 self.has_unsaved_changes = True  # Değişiklik yapıldığını işaretle
             
-            self.table.setItem(row, 3, item)  # Translation is now in column 3
+            self.table.setItem(row, 3, item)  # Çeviri 3. stunda
             
-            # İlerleme sayacını artır
+            # İlerleme sayacı
             self.completed_translations += 1
             
             # İlerleme çubuğunu ve dialog'u güncelle
@@ -1695,7 +1695,7 @@ class ModTranslator(QMainWindow):
     def worker_finished(self):
         self.active_workers -= 1
         if self.active_workers == 0:
-            # Tüm işçiler tamamlandığında
+            # Tüm işler tamamlandığında
             self.progress_bar.setValue(self.total_translations)
             self.progress.setValue(self.total_translations)
             self.status_bar.showMessage(f"Otomatik çeviri tamamlandı - {self.total_translations} dize çevrildi")
@@ -1711,7 +1711,7 @@ class ModTranslator(QMainWindow):
     def create_menu_bar(self):
         menubar = self.menuBar()
         
-        # File menu
+        # Dosya menüsü
         file_menu = menubar.addMenu("Dosya")
         
         open_action = QAction("Aç", self)
@@ -1731,7 +1731,7 @@ class ModTranslator(QMainWindow):
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
         
-        # Edit menu
+        # Düzenleme menüsü
         edit_menu = menubar.addMenu("Düzenle")
         
         find_action = QAction("Bul", self)
@@ -1761,7 +1761,7 @@ class ModTranslator(QMainWindow):
                 self.current_file_data = data
                 
             if file_name.lower().endswith('.package'):
-                # Load package file
+                # Paket dosyasını yükle
                 if self.package_file.load_from_binary(data):
                     # Tüm string tablolarını birleştir
                     self.string_table = StringTableFile()
@@ -1784,7 +1784,7 @@ class ModTranslator(QMainWindow):
                 else:
                     QMessageBox.critical(self, "Hata", "Geçersiz paket dosya biçimi")
             else:
-                # Load STBL file directly
+                # STBL dosyasını doğrudan yükle
                 self.string_table = StringTableFile()
                 if self.string_table.load_from_binary(data):
                     self.populate_table()
@@ -1809,7 +1809,7 @@ class ModTranslator(QMainWindow):
             return
             
         try:
-            # Update string table from UI
+            # Kullanıcı arayüzünden dize tablosunu güncelle
             for row in range(self.table.rowCount()):
                 key = int(self.table.item(row, 1).text())
                 translation = self.table.item(row, 3).text()
@@ -1825,13 +1825,13 @@ class ModTranslator(QMainWindow):
                         if key in self.string_table.strings:
                             stbl.strings[key] = self.string_table.strings[key]
                 
-                # Save as package file
+                # Paket dosyası olarak kaydet
                 data = self.package_file.save_to_binary(self.current_file_data)
                 if data:
                     with open(file_name, 'wb') as file:
                         file.write(data)
                     self.status_bar.showMessage(f"Paket dosyası kaydedildi {os.path.basename(file_name)}")
-                    self.has_unsaved_changes = False  # Değişiklikler kaydedildi
+                    self.has_unsaved_changes = False  # Değişiklikleri kaydet
                 else:
                     QMessageBox.critical(self, "Hata", "Paket dosyası oluşturulurken hata oluştu")
             else:
@@ -1841,7 +1841,7 @@ class ModTranslator(QMainWindow):
                     with open(file_name, 'wb') as file:
                         file.write(data)
                     self.status_bar.showMessage(f"{len(self.string_table.strings)} dizesi {os.path.basename(file_name)} dizinine kaydedildi")
-                    self.has_unsaved_changes = False  # Değişiklikler kaydedildi
+                    self.has_unsaved_changes = False  # Değişiklikleri kaydet
                 else:
                     QMessageBox.critical(self, "Hata", "STBL dosyası oluşturulurken hata oluştu")
                     
@@ -1864,25 +1864,25 @@ class ModTranslator(QMainWindow):
             row = self.table.rowCount()
             self.table.insertRow(row)
             
-            # Checkbox for selection
+            # Seçim için onay kutusu
             checkbox_item = QTableWidgetItem()
             checkbox_item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
             checkbox_item.setCheckState(Qt.Unchecked)
             self.table.setItem(row, 0, checkbox_item)
             
-            # Key
+            # Anahtar
             key_item = QTableWidgetItem(str(entry.key))
             key_item.setFlags(key_item.flags() & ~Qt.ItemIsEditable)
             self.table.setItem(row, 1, key_item)
             
-            # Original string
+            # Orijinal dize
             original_item = QTableWidgetItem(entry.value)
             original_item.setFlags(original_item.flags() & ~Qt.ItemIsEditable)
             self.table.setItem(row, 2, original_item)
             
-            # Translation
+            # Çeviri
             translation_item = QTableWidgetItem(entry.value)
-            translation_item.setFlags(translation_item.flags() & ~Qt.ItemIsEditable)  # Disable direct editing
+            translation_item.setFlags(translation_item.flags() & ~Qt.ItemIsEditable)  # Doğrudan düzenlemeyi devre dışı bırak
             
             # Eğer çeviri varsa ve orijinalden farklıysa yeşil yap
             if entry.value.strip() and translation_item.text() != original_item.text():
@@ -1896,14 +1896,14 @@ class ModTranslator(QMainWindow):
         # Tüm sütunları düzenlenemez yap
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         
-        # Connect checkbox change signal
+        # Bağlantı onay kutusu değişim sinyali
         self.table.itemChanged.connect(self.on_checkbox_changed)
         
-        # Update translate button text
+        # Çeviri düğmesi metnini güncelle
         self.update_translate_button()
         
     def on_checkbox_changed(self, item):
-        # Only process checkbox column
+        # Yalnızca işlem onay kutusu sütunu
         if item.column() == 0:
             row = item.row()
             if item.checkState() == Qt.Checked:
@@ -1912,7 +1912,7 @@ class ModTranslator(QMainWindow):
                 if row in self.selected_rows:
                     self.selected_rows.remove(row)
             
-            # Update translate button text
+            # Çeviri düğmesi metnini güncelle
             self.update_translate_button()
             
     def update_translate_button(self):
@@ -1924,7 +1924,7 @@ class ModTranslator(QMainWindow):
     def filter_table(self, text):
         for row in range(self.table.rowCount()):
             show_row = False
-            for col in range(1, 4):  # Search in Key, Original String and Translation columns
+            for col in range(1, 4):  # Anahtar, Orijinal Dize ve Düzenlenebilir Dize sütunlarında arama yapın
                 item = self.table.item(row, col)
                 if item and text.lower() in item.text().lower():
                     show_row = True
@@ -1932,7 +1932,7 @@ class ModTranslator(QMainWindow):
             self.table.setRowHidden(row, not show_row)
             
     def show_edit_dialog(self, row, column):
-        # Only show dialog for editable column (column 3)
+        # Yalnızca düzenlenebilir sütun için iletişim kutusunu göster (sütun 3)
         if column == 3:
             original_text = self.table.item(row, 2).text()
             editable_text = self.table.item(row, 3).text()
@@ -1941,15 +1941,15 @@ class ModTranslator(QMainWindow):
             if dialog.exec():
                 edited_text = dialog.get_edited_text()
                 
-                # Update the table
+                # Tabloyu güncelle
                 item = QTableWidgetItem(edited_text)
-                item.setFlags(item.flags() & ~Qt.ItemIsEditable)  # Disable direct editing
+                item.setFlags(item.flags() & ~Qt.ItemIsEditable)  # Doğrudan düzenlemeyi devre dışı bırak
                 
-                # Set background color for edited text
+                # Düzenlenen metin için arka plan rengini ayarlayın
                 if edited_text.strip() and edited_text != original_text:
                     item.setBackground(QColor("#1E392A"))  # Koyu yeşil ton
                     
-                    # Tüm satırı yeşil yap
+                    # Tüm satırı yeşil yap (işe yaramadı, kalsın daha sonra kontrol et.)
                     for col in range(4):
                         cell_item = self.table.item(row, col)
                         if cell_item:
@@ -1957,11 +1957,11 @@ class ModTranslator(QMainWindow):
                 
                 self.table.setItem(row, 3, item)
                 
-                # Update the string table
+                # Dize tablosunu güncelle
                 key = int(self.table.item(row, 1).text())
                 self.string_table.strings[key].value = edited_text
                 
-                # Mark as having unsaved changes
+                # Kaydedilmemiş değişiklikler olarak işaretle
                 self.has_unsaved_changes = True
 
     def show_settings(self):
@@ -2018,11 +2018,11 @@ class ModTranslator(QMainWindow):
                     event.ignore()
                     return
                 # Kaydetme başarılı olsa bile, kullanıcı çıkmak istemiyor olabilir
-                # Bu nedenle event.ignore() ile çıkışı engelliyoruz
+                # Bu nedenle event.ignore() ile çıkışı engelle
                 event.ignore()
                 return
             elif clicked_button == kaydetme_btn:
-                # Kullanıcı kaydetmeden çıkmak istiyor
+                # Kullanıcı kaydetmeden çık
                 event.accept()
             else:  # İptal butonu
                 event.ignore()
@@ -2033,14 +2033,14 @@ class ModTranslator(QMainWindow):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     
-    # Set application style
+    # Uygulama stilini ayarla
     app.setStyle('Fusion')
     
-    # Set default font
+    # Varsayılan yazı tipini ayarla
     font = QFont("Segoe UI", 9)
     app.setFont(font)
     
-    # Create and show window
+    # Pencere oluştur ve göster
     window = ModTranslator()
     window.show()
     
