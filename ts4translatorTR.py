@@ -9,13 +9,14 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QFileDialog, QMessageBox, QLabel, QHeaderView, QLineEdit,
                              QToolBar, QStatusBar, QMenu, QMenuBar, QProgressDialog,
                              QInputDialog, QFrame, QSplitter, QDialog, QGroupBox, QTextEdit,
-                             QRadioButton, QProgressBar)
+                             QRadioButton, QProgressBar, QCheckBox)
 from PySide6.QtCore import Qt, QSize, QThread, Signal, QThreadPool, QRunnable, QObject, Slot, QSettings
 from PySide6.QtGui import QFont, QIcon, QColor, QAction, QPalette, QFontDatabase, QIntValidator
 import urllib.request
 import urllib.parse
 import re
 import html.parser
+import time
 
 # DeepL modülünü koşullu olarak import et
 try:
@@ -1157,6 +1158,26 @@ class SettingsDialog(QDialog):
         speed_layout.addWidget(speed_label)
         speed_layout.addWidget(self.speed_input)
         
+        # Sütun görünürlük ayarları
+        column_group = QGroupBox("Sütun Görünürlüğü")
+        column_layout = QVBoxLayout(column_group)
+        
+        self.show_select_checkbox = QCheckBox("Seç Sütunu")
+        self.show_key_checkbox = QCheckBox("Anahtar Sütunu")
+        self.show_original_checkbox = QCheckBox("Orijinal Dize Sütunu")
+        self.show_translation_checkbox = QCheckBox("Düzenlenebilir Dize Sütunu")
+        
+        # Mevcut sütun görünürlük ayarlarını yükle
+        self.show_select_checkbox.setChecked(settings.value("show_select_column", True, type=bool))
+        self.show_key_checkbox.setChecked(settings.value("show_key_column", True, type=bool))
+        self.show_original_checkbox.setChecked(settings.value("show_original_column", True, type=bool))
+        self.show_translation_checkbox.setChecked(settings.value("show_translation_column", True, type=bool))
+        
+        column_layout.addWidget(self.show_select_checkbox)
+        column_layout.addWidget(self.show_key_checkbox)
+        column_layout.addWidget(self.show_original_checkbox)
+        column_layout.addWidget(self.show_translation_checkbox)
+        
         # Butonlar
         buttons_layout = QHBoxLayout()
         
@@ -1188,11 +1209,11 @@ class SettingsDialog(QDialog):
                 padding: 0 4px;
                 left: 8px;
             }
-            QRadioButton, QLabel {
+            QRadioButton, QLabel, QCheckBox {
                 color: #FFFFFF;
                 padding: 4px;
             }
-            QRadioButton::indicator {
+            QRadioButton::indicator, QCheckBox::indicator {
                 width: 16px;
                 height: 16px;
             }
@@ -1226,6 +1247,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(service_group)
         layout.addWidget(api_group)
         layout.addWidget(speed_group)
+        layout.addWidget(column_group)
         layout.addLayout(buttons_layout)
         
     def save_settings(self):
@@ -1276,6 +1298,27 @@ class SettingsDialog(QDialog):
         settings.setValue("translation_service", "google" if self.google_radio.isChecked() else "deepl")
         settings.setValue("deepl_api_key", self.api_key_input.text().strip())
         settings.setValue("translation_speed", self.speed_input.text().strip())
+        
+        # Sütun görünürlük ayarlarını kaydet
+        settings.setValue("show_select_column", self.show_select_checkbox.isChecked())
+        settings.setValue("show_key_column", self.show_key_checkbox.isChecked())
+        settings.setValue("show_original_column", self.show_original_checkbox.isChecked())
+        settings.setValue("show_translation_column", self.show_translation_checkbox.isChecked())
+        
+        # Ana pencereyi güncelle
+        if isinstance(self.parent(), ModTranslator):
+            parent = self.parent()
+            parent.show_select = self.show_select_checkbox.isChecked()
+            parent.show_key = self.show_key_checkbox.isChecked()
+            parent.show_original = self.show_original_checkbox.isChecked()
+            parent.show_translation = self.show_translation_checkbox.isChecked()
+            
+            # Tablo sütunlarını güncelle
+            parent.table.setColumnHidden(0, not parent.show_select)
+            parent.table.setColumnHidden(1, not parent.show_key)
+            parent.table.setColumnHidden(2, not parent.show_original)
+            parent.table.setColumnHidden(3, not parent.show_translation)
+        
         self.accept()
 
 class ModTranslator(QMainWindow):
@@ -1283,6 +1326,15 @@ class ModTranslator(QMainWindow):
         super().__init__()
         self.setWindowTitle("The Sims 4 Mod Translator TR | Discord: merxdo")
         self.setMinimumSize(1200, 800)
+        
+        # Ayarları yükle
+        settings = QSettings("TS4ModTranslator", "Settings")
+        
+        # Filtre durumları için değişkenler
+        self.show_select = settings.value("show_select_column", True, type=bool)
+        self.show_key = settings.value("show_key_column", True, type=bool)
+        self.show_original = settings.value("show_original_column", True, type=bool)
+        self.show_translation = settings.value("show_translation_column", True, type=bool)
         
         # Paket dosyasını başlat
         self.package_file = DBPFFile()
@@ -1621,11 +1673,14 @@ class ModTranslator(QMainWindow):
             # Toplam çevrilecek metin sayısı
             self.total_translations = len(texts_to_translate)
             self.completed_translations = 0
+            self.translation_start_time = time.time()
                 
             # İlerleme çubuğunu sıfırla
             self.progress_bar.setValue(0)
             self.progress_bar.setFormat("Çeviri İlerlemesi: %p% (%v/%m)")
             self.progress_bar.setMaximum(self.total_translations)
+            # İlerleme çubuğunu mavi renge ayarla (varsayılan)
+            self.progress_bar.setStyleSheet("QProgressBar { text-align: center; } QProgressBar::chunk { background-color: #007ACC; }")
 
             # İlerleme iletişim kutusu
             self.progress = QProgressDialog("Dizeler çevriliyor...", "İptal", 0, self.total_translations, self)
@@ -1690,6 +1745,33 @@ class ModTranslator(QMainWindow):
             # İlerleme çubuğunu ve dialog'u güncelle
             self.progress_bar.setValue(self.completed_translations)
             self.progress.setValue(self.completed_translations)
+            
+            # Çeviri %100 tamamlandığında ilerleme çubuğunu yeşil yap
+            if self.completed_translations == self.total_translations:
+                self.progress_bar.setStyleSheet("QProgressBar { text-align: center; } QProgressBar::chunk { background-color: #4CAF50; }")
+                self.status_bar.showMessage("Çeviri tamamlandı!")
+            
+            # Tahmini süreyi güncelle
+            elapsed_time = time.time() - self.translation_start_time
+            if self.completed_translations > 0:
+                avg_time_per_item = elapsed_time / self.completed_translations
+                remaining_items = self.total_translations - self.completed_translations
+                estimated_remaining_time = avg_time_per_item * remaining_items
+                
+                # Süreyi formatla
+                hours = int(estimated_remaining_time // 3600)
+                minutes = int((estimated_remaining_time % 3600) // 60)
+                seconds = int(estimated_remaining_time % 60)
+                
+                time_str = ""
+                if hours > 0:
+                    time_str += f"{hours} saat "
+                if minutes > 0:
+                    time_str += f"{minutes} dakika "
+                if seconds > 0:
+                    time_str += f"{seconds} saniye"
+                    
+                self.status_bar.showMessage(f"Tahmini kalan süre: {time_str}")
     
     @Slot()
     def worker_finished(self):
@@ -2029,6 +2111,22 @@ class ModTranslator(QMainWindow):
         else:
             # Değişiklik yoksa normal çıkış
             event.accept()
+
+    def toggle_column_visibility(self, column):
+        """Sütun görünürlüğünü değiştirir"""
+        if column == 0:
+            self.show_select = self.show_select_checkbox.isChecked()
+        elif column == 1:
+            self.show_key = self.show_key_checkbox.isChecked()
+        elif column == 2:
+            self.show_original = self.show_original_checkbox.isChecked()
+        elif column == 3:
+            self.show_translation = self.show_translation_checkbox.isChecked()
+            
+        self.table.setColumnHidden(0, not self.show_select)
+        self.table.setColumnHidden(1, not self.show_key)
+        self.table.setColumnHidden(2, not self.show_original)
+        self.table.setColumnHidden(3, not self.show_translation)
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
